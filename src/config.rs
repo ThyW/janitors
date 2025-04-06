@@ -9,10 +9,10 @@ use crate::{JResult, bucket::Bucket, watch_path::WatchPath};
 
 pub const DEFAULT_CONFIG_PATH: &str = "~/.config/janitors/config.toml";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct Config {
-    pub watch_paths: Vec<WatchPath>,
-    pub buckets: Vec<Bucket>,
+    pub watch: Vec<WatchPath>,
+    pub bucket: Vec<Bucket>,
 }
 
 type LoadConfigOutput = (Receiver<Result<Event, Error>>, Config);
@@ -22,7 +22,7 @@ impl Config {
 
         let mut config: Config = toml::from_str(&config_str)?;
 
-        for b in config.buckets.iter_mut() {
+        for b in config.bucket.iter_mut() {
             b.init()?;
         }
 
@@ -44,7 +44,7 @@ impl Config {
         watchers.clear();
         remove_indecies.clear();
 
-        for watch_path in self.watch_paths.iter() {
+        for watch_path in self.watch.iter() {
             let (tx, rx) = unbounded();
             let mut watcher = recommended_watcher(tx)?;
             watcher.watch(&watch_path.path, watch_path.recursive_mode.into())?;

@@ -22,7 +22,7 @@ use crate::errors::JResult;
 /// The `extension_filters` checks only the final extension, so for example file
 /// `archive.tar.gz` would not be recognized by name filter `"tar"`, because only the final
 /// extension is checked.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct Bucket {
     /// Unique identifier for the bucket.
     pub name: String,
@@ -39,12 +39,14 @@ pub struct Bucket {
     /// What action should be performed on the file.
     pub action: Action,
     #[serde(skip)]
-    _regexes: Vec<Regex>,
+    pub _regexes: Vec<Regex>,
 }
 
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[serde(rename_all = "lowercase")]
 pub enum Action {
     /// Move the file to the bucket destination.
+    #[default]
     Move,
     /// Delete the file.
     Delete,

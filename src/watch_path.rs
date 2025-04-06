@@ -11,7 +11,7 @@ use serde::Deserialize;
 /// the file fits into multiple buckets(even after comparing bucket priorities), the bucket with
 /// the lowest lexicographical name is used. A recursive mode can also be provided, to either check
 /// only the given directory(non-recursive) or the entire sub tree(recursive).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct WatchPath {
     /// Path to watch.
     pub path: PathBuf,
@@ -23,7 +23,7 @@ pub struct WatchPath {
 
 /// If the `Recursive` mode is used, the entire sub tree is watched for new files. If the
 /// `NonRecursive` mode is used, only the immediate directory is checked for new files.
-#[derive(Debug, Clone, Deserialize, Copy, Default)]
+#[derive(Debug, Clone, Deserialize, Copy, Default, PartialEq, Eq)]
 pub enum RecMode {
     #[serde(rename(deserialize = "recursive"))]
     Recursive,
@@ -57,7 +57,7 @@ impl WatchPath {
             _ => return Ok(()),
         };
         let possible_buckets: Vec<&Bucket> = config
-            .buckets
+            .bucket
             .iter()
             .filter(|bucket| self.bucket_names.contains(&bucket.name))
             .collect();

@@ -1,6 +1,8 @@
 mod bucket;
 mod config;
 mod errors;
+#[cfg(test)]
+mod tests;
 mod watch_path;
 
 use config::Config;
