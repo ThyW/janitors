@@ -1,10 +1,11 @@
-use std::{error::Error as ErrorT, fs::read_to_string, path::PathBuf};
+use std::{collections::HashSet, fs::read_to_string, path::PathBuf};
 
 use crossbeam::channel::{Receiver, unbounded};
 use notify::{Error, Event, RecursiveMode, Watcher, recommended_watcher};
+use resolve_path::PathResolveExt;
 use serde::Deserialize;
 
-use crate::{bucket::Bucket, watch_path::WatchPath};
+use crate::{JResult, bucket::Bucket, watch_path::WatchPath};
 
 pub const DEFAULT_CONFIG_PATH: &str = "~/.config/janitors/config.toml";
 
@@ -16,10 +17,14 @@ pub struct Config {
 
 type LoadConfigOutput = (Receiver<Result<Event, Error>>, Config);
 impl Config {
-    pub fn load() -> Result<LoadConfigOutput, Box<dyn ErrorT>> {
-        let config_str = read_to_string(DEFAULT_CONFIG_PATH)?;
+    pub fn load() -> JResult<LoadConfigOutput> {
+        let config_str = read_to_string(DEFAULT_CONFIG_PATH.resolve())?;
 
-        let config: Config = toml::from_str(&config_str)?;
+        let mut config: Config = toml::from_str(&config_str)?;
+
+        for b in config.buckets.iter_mut() {
+            b.init()?;
+        }
 
         let (tx, rx) = unbounded();
         let mut watcher = recommended_watcher(tx)?;
@@ -34,8 +39,8 @@ impl Config {
     pub fn setup_watchers(
         &self,
         watchers: &mut Vec<(Receiver<Result<Event, Error>>, WatchPath)>,
-        remove_indecies: &mut Vec<usize>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+        remove_indecies: &mut HashSet<usize>,
+    ) -> JResult<()> {
         watchers.clear();
         remove_indecies.clear();
 

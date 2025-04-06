@@ -1,4 +1,4 @@
-use crate::{bucket::Bucket, config::Config};
+use crate::{bucket::Bucket, config::Config, errors::JResult};
 use std::path::PathBuf;
 
 use notify::{Event, EventKind, RecursiveMode};
@@ -43,7 +43,7 @@ impl From<RecMode> for RecursiveMode {
 
 impl WatchPath {
     /// Handle a provided file system event.
-    pub fn handle(&self, ev: Event, config: &Config) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn handle(&self, ev: Event, config: &Config) -> JResult {
         if ev.attrs.flag().is_some() {
             // The `Rescan` flag has been found: ignore the event and rescan.
             return Ok(());

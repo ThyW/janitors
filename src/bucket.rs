@@ -1,5 +1,4 @@
 use std::{
-    error::Error,
     fs::{remove_dir_all, remove_file},
     path::{Path, PathBuf},
 };
@@ -11,6 +10,8 @@ use fs_extra::{
 use regex::Regex;
 use serde::Deserialize;
 
+use crate::errors::JResult;
+
 /// A `Bucket` is a destination for files from watched paths.
 ///
 /// It has filters for name and extensions. If a file 'fits' into multiple buckets, the one
@@ -21,7 +22,7 @@ use serde::Deserialize;
 /// The `extension_filters` checks only the final extension, so for example file
 /// `archive.tar.gz` would not be recognized by name filter `"tar"`, because only the final
 /// extension is checked.
-#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Bucket {
     /// Unique identifier for the bucket.
     pub name: String,
@@ -37,6 +38,8 @@ pub struct Bucket {
     pub priority: u32,
     /// What action should be performed on the file.
     pub action: Action,
+    #[serde(skip)]
+    _regexes: Vec<Regex>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -60,6 +63,16 @@ impl PartialOrd for Bucket {
     }
 }
 
+impl PartialEq for Bucket {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.destination == other.destination
+            && self.priority == other.priority
+    }
+}
+
+impl Eq for Bucket {}
+
 impl Ord for Bucket {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
@@ -68,48 +81,32 @@ impl Ord for Bucket {
 
 impl Bucket {
     /// Given a path, check if the file fits into the bucket.
-    pub fn is_fitting(&self, path: &impl AsRef<Path>) -> Result<bool, Box<dyn Error>> {
+    pub fn is_fitting(&self, path: &impl AsRef<Path>) -> JResult<bool> {
         let path = path.as_ref();
         let opt = path.extension();
-        if opt.is_none_or(|raw_fname| raw_fname.to_str().is_none()) {
-            return Err("unable to convert file extension to utf8".into());
+        if let Some(raw_ext) = opt {
+            if let Some(extension) = raw_ext.to_str() {
+                if self.extension_filters.contains(&extension.to_string()) {
+                    return Ok(true);
+                }
+            }
         }
-
-        let extension =
-            String::from_utf8(opt.unwrap().to_str().unwrap().as_bytes().to_vec()).unwrap();
-
-        if self.extension_filters.contains(&extension) {
-            return Ok(true);
-        }
-
         // If no extension filters are not found, try name filters.
         let opt = path.file_name();
-        if opt.is_none_or(|raw_fname| raw_fname.to_str().is_none()) {
-            return Err("unable to convert filename to utf8".into());
+        if let Some(raw_fname) = opt {
+            if let Some(fname) = raw_fname.to_str() {
+                let name_match = self._regexes.iter().any(|filter| filter.is_match(fname));
+
+                return Ok(name_match);
+            }
         }
-        let file_name = str::from_utf8(opt.unwrap().to_str().unwrap().as_bytes()).unwrap();
-
-        let name_match = self
-            .name_filters
-            .iter()
-            .map(|filter| -> Result<bool, Box<dyn Error>> {
-                let regex = Regex::new(filter)?;
-
-                Ok(regex.is_match(file_name))
-            })
-            .any(|x| x.is_ok_and(|inner| inner));
-
-        Ok(name_match)
+        Ok(false)
     }
 
     /// Try to apply the bucket's action on file.
     ///
     /// Note: This method does not check if the file fits into the bucket.
-    pub fn apply_action(
-        &self,
-        path: &impl AsRef<Path>,
-        is_file: bool,
-    ) -> Result<(), Box<dyn Error>> {
+    pub fn apply_action(&self, path: &impl AsRef<Path>, is_file: bool) -> JResult {
         let path = path.as_ref();
         let to_path = self.destination.join(
             path.components()
@@ -143,6 +140,16 @@ impl Bucket {
                 };
             }
         };
+
+        Ok(())
+    }
+
+    /// Initialize Regex matchers.
+    pub fn init(&mut self) -> JResult {
+        self._regexes.clear();
+        for filter in self.name_filters.iter() {
+            self._regexes.push(Regex::new(filter)?);
+        }
 
         Ok(())
     }
