@@ -56,6 +56,7 @@ impl WatchPath {
             },
             _ => return Ok(()),
         };
+        log::trace!("Create event: {ev:?}");
         let possible_buckets: Vec<&Bucket> = config
             .bucket
             .iter()

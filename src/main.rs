@@ -5,8 +5,9 @@ mod errors;
 mod tests;
 mod watch_path;
 
-use config::Config;
-use crossbeam::channel::{Select, TryRecvError};
+use clap::Parser;
+use config::{Config, DEFAULT_CONFIG_PATH};
+use crossbeam::channel::Select;
 use notify::EventKind;
 use std::{collections::HashSet, time::Duration};
 
@@ -14,24 +15,42 @@ use errors::JResult;
 
 // TODO: add settings for file overriding/renaming/skipping
 
+#[derive(Parser)]
+struct Cli {
+    #[arg(long, help = "run only once on all watch paths found in config")]
+    one_shot: bool,
+    #[arg(
+        long,
+        default_value_t = 5,
+        help = "how verbose do we want to be with logs"
+    )]
+    verbosity: usize,
+    config: Option<String>,
+}
+
 fn main() -> JResult {
+    let cli = Cli::parse();
     // Initialize the logging facility.
     stderrlog::new()
-        .verbosity(stderrlog::LogLevelNum::Trace)
+        .verbosity(stderrlog::LogLevelNum::from(cli.verbosity))
         .timestamp(stderrlog::Timestamp::Second)
         .module(module_path!())
         .color(stderrlog::ColorChoice::Auto)
         .init()?;
 
-    let (mut rx, mut config) = Config::load()?;
+    let config_file_path = cli.config.unwrap_or(DEFAULT_CONFIG_PATH.into());
+
+    let (mut rx, mut config) = Config::load(&config_file_path)?;
+    log::info!("Loaded initial configuration.");
     let mut watchers = Vec::new();
     let mut remove_indecies = HashSet::new();
 
     config.setup_watchers(&mut watchers, &mut remove_indecies)?;
+    log::info!("File watchers have been setup.");
     let mut sel = Select::new();
 
-    for (rx, _) in watchers.iter() {
-        sel.recv(rx);
+    for (rx_, _, _) in watchers.iter() {
+        sel.recv(rx_);
     }
 
     loop {
@@ -42,9 +61,12 @@ fn main() -> JResult {
                     ev.paths.first().unwrap().display()
                 );
                 log::trace!("Config file modify event: {:?}", mev);
-                let res = Config::load();
+                let res = Config::load(&config_file_path);
                 if let Err(e) = &res {
                     log::error!("reloading config: {e}");
+                    log::warn!(
+                        "config is not loaded, please fix the issues as soon as possible and save the config file to apply changes."
+                    );
                     continue;
                 }
                 (rx, config) = res?;
@@ -56,24 +78,26 @@ fn main() -> JResult {
                 res?;
 
                 sel = Select::new();
-                for (rx, _) in watchers.iter() {
-                    sel.recv(rx);
+                for (rx_, _, _) in watchers.iter() {
+                    sel.recv(rx_);
                 }
             }
         }
         let res = sel.select_timeout(Duration::from_secs(1));
         if let Ok(op) = res {
             let idx = op.index();
+            let (rx_, watch_path, _) = &watchers[idx];
             if remove_indecies.contains(&idx) {
                 log::info!(
                     "Skipping event, because operation index '{}' is set to be ignored.",
                     idx
                 );
+                let _ = op.recv(rx_);
                 continue;
             }
 
-            let (rx_, watch_path) = &watchers[idx];
-            match rx_.try_recv() {
+            let res = op.recv(rx_);
+            match res {
                 Ok(e) => {
                     let res = e;
                     if let Err(e) = &res {
@@ -81,7 +105,7 @@ fn main() -> JResult {
                         continue;
                     }
                     let ev = res?;
-                    log::trace!("Notify event: {:?}", ev);
+                    // log::trace!("Notify event: {:?}", ev);
                     let res = watch_path.handle(ev, &config);
                     if let Err(e) = &res {
                         log::error!("Error occured when handling event: {e}");
@@ -90,12 +114,11 @@ fn main() -> JResult {
                     res?;
                 }
                 Err(e) => {
-                    if e == TryRecvError::Disconnected {
-                        log::info!(
-                            "Transmitter with index '{idx}' disconnected, ignoring all further messages."
-                        );
-                        remove_indecies.insert(idx);
-                    }
+                    log::error!("Recv error received: {e}");
+                    log::info!(
+                        "Transmitter with index '{idx}' disconnected, ignoring all further messages."
+                    );
+                    remove_indecies.insert(idx);
                 }
             }
         }
