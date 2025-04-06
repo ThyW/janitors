@@ -143,6 +143,8 @@ impl Bucket {
             }
         };
 
+        log::info!("'{}' put into bin '{}'.", path.display(), self.name);
+
         Ok(())
     }
 

@@ -42,6 +42,12 @@ fn main() -> JResult {
 
     let (mut rx, mut config) = Config::load(&config_file_path)?;
     log::info!("Loaded initial configuration.");
+    if cli.one_shot {
+        log::info!("Running in one-shot mode.");
+        config.one_shot()?;
+        return Ok(());
+    }
+
     let mut watchers = Vec::new();
     let mut remove_indecies = HashSet::new();
 
@@ -106,7 +112,7 @@ fn main() -> JResult {
                     }
                     let ev = res?;
                     // log::trace!("Notify event: {:?}", ev);
-                    let res = watch_path.handle(ev, &config);
+                    let res = watch_path.handle_event(ev, &config);
                     if let Err(e) = &res {
                         log::error!("Error occured when handling event: {e}");
                         continue;

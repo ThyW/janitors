@@ -54,4 +54,42 @@ impl Config {
 
         Ok(())
     }
+
+    pub fn one_shot(&self) -> JResult {
+        for watch_path in self.watch.iter() {
+            let recursive = matches!(
+                watch_path.recursive_mode,
+                crate::watch_path::RecMode::Recursive
+            );
+            let mut stack = vec![watch_path.path.clone()];
+            let mut file_paths = Vec::new();
+            let mut dir_paths = Vec::new();
+
+            while let Some(p) = stack.pop() {
+                if p.is_file() {
+                    file_paths.push(p.clone());
+                } else if p.is_dir() {
+                    for dentry in p.read_dir()?.map_while(Result::ok) {
+                        // Skip current and previous directory entries."
+                        if let Some(fname) = dentry.path().file_name() {
+                            if fname.to_string_lossy() == "." || fname.to_string_lossy() == ".." {
+                                continue;
+                            }
+                        }
+                        if recursive {
+                            stack.push(dentry.path().clone());
+                        } else if dentry.path().is_dir() {
+                            dir_paths.push(dentry.path().clone());
+                        } else if dentry.path().is_file() {
+                            file_paths.push(dentry.path().clone())
+                        }
+                    }
+                }
+            }
+
+            watch_path.handle_paths(file_paths.into_iter(), true, self)?;
+            watch_path.handle_paths(dir_paths.into_iter(), false, self)?;
+        }
+        Ok(())
+    }
 }

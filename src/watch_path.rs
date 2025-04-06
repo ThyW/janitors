@@ -43,7 +43,7 @@ impl From<RecMode> for RecursiveMode {
 
 impl WatchPath {
     /// Handle a provided file system event.
-    pub fn handle(&self, ev: Event, config: &Config) -> JResult {
+    pub fn handle_event(&self, ev: Event, config: &Config) -> JResult {
         if ev.attrs.flag().is_some() {
             // The `Rescan` flag has been found: ignore the event and rescan.
             return Ok(());
@@ -57,13 +57,22 @@ impl WatchPath {
             _ => return Ok(()),
         };
         log::trace!("Create event: {ev:?}");
+        self.handle_paths(ev.paths.into_iter(), is_file, config)?;
+
+        Ok(())
+    }
+
+    pub fn handle_paths<I>(&self, paths: I, is_file: bool, config: &Config) -> JResult
+    where
+        I: IntoIterator<Item = PathBuf>,
+    {
         let possible_buckets: Vec<&Bucket> = config
             .bucket
             .iter()
             .filter(|bucket| self.bucket_names.contains(&bucket.name))
             .collect();
 
-        for path in ev.paths {
+        for path in paths.into_iter() {
             let mut fitting_buckets: Vec<&&Bucket> = possible_buckets
                 .iter()
                 .filter(|bucket| bucket.is_fitting(&path).is_ok_and(|inner| inner))
@@ -74,7 +83,6 @@ impl WatchPath {
                 bucket.apply_action(&path, is_file)?;
             }
         }
-
         Ok(())
     }
 }
