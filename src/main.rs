@@ -13,8 +13,6 @@ use std::{collections::HashSet, time::Duration};
 
 use errors::JResult;
 
-// TODO: add settings for file overriding/renaming/skipping
-
 #[derive(Parser)]
 struct Cli {
     #[arg(long, help = "run only once on all watch paths found in config")]

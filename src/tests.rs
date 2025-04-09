@@ -15,6 +15,7 @@ fn parse_config() {
         name_filters = [\".*\\\\.tar\\\\.gz\"]
         action = \"copy\"
         priority = 0
+        override_action = \"skip\"
 
         [[bucket]]
         name = \"bucket2\"
@@ -22,6 +23,7 @@ fn parse_config() {
         extension_filters = [\"exe\", \"bin\"]
         name_filters = []
         action = \"move\"
+        override_action = \"rename\"
         priority = 0
 
         [[bucket]]
@@ -31,6 +33,7 @@ fn parse_config() {
         name_filters = []
         action = \"delete\"
         priority = 255
+        override_action = \"overwrite\"
         ";
 
     let exp = Config {
@@ -47,6 +50,7 @@ fn parse_config() {
                 name_filters: vec![".*\\.tar\\.gz".into()],
                 priority: 0,
                 action: bucket::Action::Copy,
+                override_action: Default::default(),
                 _regexes: Vec::new(),
             },
             Bucket {
@@ -56,6 +60,7 @@ fn parse_config() {
                 name_filters: vec![],
                 priority: 0,
                 action: bucket::Action::Move,
+                override_action: bucket::OverrideAction::Rename,
                 _regexes: Vec::new(),
             },
             Bucket {
@@ -65,6 +70,7 @@ fn parse_config() {
                 name_filters: vec![],
                 priority: 255,
                 action: bucket::Action::Delete,
+                override_action: bucket::OverrideAction::Overwrite,
                 _regexes: Vec::new(),
             },
         ]),
