@@ -52,7 +52,7 @@ fn main() -> JResult {
 
     log::info!("using config: {}", config_file_path);
 
-    let (mut rx, mut config) = Config::load(&config_file_path)?;
+    let (mut rx, mut config, mut _watcher) = Config::load(&config_file_path)?;
     log::info!("Loaded initial configuration.");
     if cli.one_shot {
         log::info!("Running in one-shot mode.");
@@ -87,7 +87,7 @@ fn main() -> JResult {
                     );
                     continue;
                 }
-                (rx, config) = res?;
+                (rx, config, _watcher) = res?;
 
                 let res = config.setup_watchers(&mut watchers, &mut remove_indecies);
                 if let Err(e) = &res {

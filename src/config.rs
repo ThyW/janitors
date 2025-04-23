@@ -12,7 +12,7 @@ pub const CONFIG_PATHS: [&str; 3] = [
     "~/.janitors.toml",
     "/etc/janitors/config.toml",
 ];
-type LoadConfigOutput = (Receiver<Result<Event, Error>>, Config);
+type LoadConfigOutput = (Receiver<Result<Event, Error>>, Config, INotifyWatcher);
 type WatcherState = (Receiver<Result<Event, Error>>, WatchPath, INotifyWatcher);
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -36,7 +36,7 @@ impl Config {
         let mut watcher = recommended_watcher(tx)?;
         watcher.watch(&PathBuf::from(resolved_path), RecursiveMode::NonRecursive)?;
 
-        Ok((rx, config))
+        Ok((rx, config, watcher))
     }
 
     pub fn setup_watchers(
