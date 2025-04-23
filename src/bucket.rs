@@ -9,6 +9,7 @@ use fs_extra::{
     file::{copy, move_file},
 };
 use regex::Regex;
+use resolve_path::PathResolveExt;
 use serde::Deserialize;
 
 use crate::errors::{JError, JResult};
@@ -17,7 +18,7 @@ use crate::errors::{JError, JResult};
 ///
 /// It has filters for name and extensions. If a file 'fits' into multiple buckets, the one
 /// with the highest `priority` is used. A bucket has multiple actions that can be
-/// performed when a is being placed in it: the file can simply be moved, it can be
+/// performed when a file is being placed in it: the file can simply be moved, it can be
 /// copied or deleted all together.
 ///
 /// The `extension_filters` checks only the final extension, so for example file
@@ -151,7 +152,7 @@ impl Bucket {
     /// Note: This method does not check if the file fits into the bucket.
     pub fn apply_action(&self, path: &impl AsRef<Path>, is_file: bool) -> JResult {
         let path = path.as_ref();
-        let mut to_path = self.destination.join(
+        let mut to_path = self.destination.resolve().join(
             path.components()
                 .next_back()
                 .expect("unable to get last component of path"),

@@ -6,9 +6,10 @@ mod tests;
 mod watch_path;
 
 use clap::Parser;
-use config::{Config, DEFAULT_CONFIG_PATH};
+use config::{CONFIG_PATHS, Config};
 use crossbeam::channel::Select;
 use notify::EventKind;
+use resolve_path::PathResolveExt;
 use std::{collections::HashSet, time::Duration};
 
 use errors::JResult;
@@ -36,7 +37,20 @@ fn main() -> JResult {
         .color(stderrlog::ColorChoice::Auto)
         .init()?;
 
-    let config_file_path = cli.config.unwrap_or(DEFAULT_CONFIG_PATH.into());
+    let config_file_path = if cli.config.is_some() {
+        cli.config.unwrap()
+    } else {
+        let mut final_path = CONFIG_PATHS[2].into();
+        for path in CONFIG_PATHS.iter() {
+            if std::fs::exists(path.resolve())? {
+                final_path = path.to_string();
+                break;
+            }
+        }
+        final_path
+    };
+
+    log::info!("using config: {}", config_file_path);
 
     let (mut rx, mut config) = Config::load(&config_file_path)?;
     log::info!("Loaded initial configuration.");
@@ -109,10 +123,11 @@ fn main() -> JResult {
                         continue;
                     }
                     let ev = res?;
-                    // log::trace!("Notify event: {:?}", ev);
                     let res = watch_path.handle_event(ev, &config);
                     if let Err(e) = &res {
-                        log::error!("Error occured when handling event: {e}");
+                        log::error!(
+                            "Error occured when handling event: {e}; make sure the destination path exists."
+                        );
                         continue;
                     }
                     res?;

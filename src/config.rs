@@ -7,7 +7,11 @@ use serde::Deserialize;
 
 use crate::{JResult, bucket::Bucket, watch_path::WatchPath};
 
-pub const DEFAULT_CONFIG_PATH: &str = "~/.config/janitors/config.toml";
+pub const CONFIG_PATHS: [&str; 3] = [
+    "~/.config/janitors/config.toml",
+    "~/.janitors.toml",
+    "/etc/janitors/config.toml",
+];
 type LoadConfigOutput = (Receiver<Result<Event, Error>>, Config);
 type WatcherState = (Receiver<Result<Event, Error>>, WatchPath, INotifyWatcher);
 
@@ -46,7 +50,7 @@ impl Config {
         for watch_path in self.watch.iter() {
             let (tx, rx) = unbounded();
             let mut watcher = recommended_watcher(tx)?;
-            watcher.watch(&watch_path.path, watch_path.recursive_mode.into())?;
+            watcher.watch(&watch_path.path.resolve(), watch_path.recursive_mode.into())?;
 
             // If the watcher gets dropped the channel closes, so we have to return it here.
             watchers.push((rx, watch_path.clone(), watcher));
@@ -57,11 +61,12 @@ impl Config {
 
     pub fn one_shot(&self) -> JResult {
         for watch_path in self.watch.iter() {
+            log::trace!("one-shotting watch path: {watch_path:?}");
             let recursive = matches!(
                 watch_path.recursive_mode,
                 crate::watch_path::RecMode::Recursive
             );
-            let mut stack = vec![watch_path.path.clone()];
+            let mut stack = vec![std::path::PathBuf::from(watch_path.path.resolve())];
             let mut file_paths = Vec::new();
             let mut dir_paths = Vec::new();
 
@@ -70,18 +75,25 @@ impl Config {
                     file_paths.push(p.clone());
                 } else if p.is_dir() {
                     for dentry in p.read_dir()?.map_while(Result::ok) {
-                        // Skip current and previous directory entries."
+                        // Skip current and previous directory entries.
                         if let Some(fname) = dentry.path().file_name() {
                             if fname.to_string_lossy() == "." || fname.to_string_lossy() == ".." {
                                 continue;
                             }
                         }
-                        if recursive {
-                            stack.push(dentry.path().clone());
+                        // Ignore bucket directories.
+                        if self
+                            .bucket
+                            .iter()
+                            .any(|b| b.destination.resolve() == dentry.path().resolve())
+                        {
+                            continue;
+                        } else if recursive {
+                            stack.push(dentry.path().resolve().into());
                         } else if dentry.path().is_dir() {
-                            dir_paths.push(dentry.path().clone());
+                            dir_paths.push(dentry.path().resolve().into());
                         } else if dentry.path().is_file() {
-                            file_paths.push(dentry.path().clone())
+                            file_paths.push(dentry.path().resolve().into())
                         }
                     }
                 }

@@ -45,7 +45,7 @@ impl WatchPath {
     /// Handle a provided file system event.
     pub fn handle_event(&self, ev: Event, config: &Config) -> JResult {
         if ev.attrs.flag().is_some() {
-            // The `Rescan` flag has been found: ignore the event and rescan.
+            // The `Rescan` flag has been found: ignore the event and re-scan.
             return Ok(());
         }
         let is_file = match ev.kind {
@@ -78,8 +78,10 @@ impl WatchPath {
                 .filter(|bucket| bucket.is_fitting(&path).is_ok_and(|inner| inner))
                 .collect();
             fitting_buckets.sort();
+            fitting_buckets.reverse();
 
             if let Some(bucket) = fitting_buckets.first() {
+                log::trace!("picked bucket {} for file {}", bucket.name, &path.display());
                 bucket.apply_action(&path, is_file)?;
             }
         }
