@@ -85,3 +85,20 @@ Each bucket also has an `override_action` associated with it. This specifies the
 ### Setting up janitors as a daemon
 
 If you are using `systemd` you can create a custom `systemd` file to run `janitors` on startup:
+
+```config
+[Unit]
+Description=janitors cleaning daemon
+
+[Service]
+ExecStart=/path/to/janitors/binary
+
+[Install]
+WantedBy=default.target
+```
+
+Name the file `janitors.service` and place it into `~/.config/systemd/user/`. Run `systemctl --user enable janitors.service` to enable the service to start on startup. Than you can manually start it by `systemctl --user start janitors.service`. To check the status and logs, run `systemctl --user status janitors.service`.
+
+### Running in one-shot mode
+
+To run `janitors` in one-shot mode, run `janitors --one-shot`.
